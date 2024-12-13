@@ -5,8 +5,9 @@ import folium
 import os
 from dotenv import load_dotenv
 
+
 def load(file_name):
-    with open(file_name, "r") as my_file:
+    with open(file_name, "r", encoding='CP1251') as my_file:
         coffee_json = my_file.read()
     coffee = json.loads(coffee_json)
     return coffee
@@ -30,43 +31,56 @@ def fetch_coordinates(apikey, address):
     return lon, lat
 
 
-def coffee_place(coffee_distance):
-    return coffee_distance['distance']
-
-
-def distance_calculation(coords_1,file_name):
+def distance_calculation(user_location,file_name):
+    active_file = load(file_name)
     locations = []
     n = 0
-    while n < len(load(file_name)):
-        location = { 'Name':load(file_name)[n]['Name'],
-                     'latitude':load(file_name)[n]['Latitude_WGS84'],#широта
-                     'longitude':load(file_name)[n]['Longitude_WGS84'],#долгота
-                     'distance': distance.distance(coords_1, (load(file_name)[n]['Longitude_WGS84'],load(file_name)[n]['Latitude_WGS84'])).km}
+    while n < len(active_file):
+        location = {
+            'Name':active_file[n]['Name'],
+            'latitude':active_file[n]['geoData']['coordinates'][1],
+            'longitude':active_file[n]['geoData']['coordinates'][0],
+            'distance': distance.distance(user_location, (active_file[n]['geoData']['coordinates'][1],
+                                                     active_file[n]['geoData']['coordinates'][0])).km
+        }
         locations.append(location)
         n+=1
     return locations
 
 
-def create_map(your_location, markers):
-    map = folium.Map(your_location, zoom_start=14)
+def coffee_place(coffee_distance):
+    return coffee_distance['distance']
+
+
+def sorted_coffee_list(user_location,file_name):
+    top = sorted(distance_calculation((user_location[1],user_location[0]),file_name), key=coffee_place)
+    nearby_top_5 = []
+    n=0
+    while n<5:
+        nearby_top_5.append(top[n])
+        n+=1
+    return nearby_top_5
+
+
+def create_map(user_location, markers):
+    m = folium.Map((user_location[1],user_location[0]), zoom_start=10)
     for mark in markers:
         folium.Marker(
             location=(mark['latitude'],mark['longitude']),
             tooltip=mark['Name'],
             popup=mark['Name'],
             icon=folium.Icon(icon="cutlery"),
-        ).add_to(map)
-    map.save("index.html")
+        ).add_to(m)
+    m.save("index.html")
 
 
 def main():
     load_dotenv()
     apikey = os.getenv('APIKEY')
     file_name = 'coffee.json'
-    location_1 = input('Где вы находитесь: ')
-    coords_1 = fetch_coordinates(apikey, location_1)
-    sorted_coffee_list=sorted(distance_calculation(coords_1,file_name), key=coffee_place)[:5]
-    create_map(list(coords_1), sorted_coffee_list)
+    location_user = input('Где вы находитесь: ')
+    user_location = fetch_coordinates(apikey, location_user)
+    create_map(user_location, sorted_coffee_list(user_location,file_name))
 
 
 if __name__ == '__main__':
